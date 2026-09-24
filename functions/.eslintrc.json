@@ -1,0 +1,10 @@
+{
+  "root": true,
+  "parserOptions": {"ecmaVersion": 2020},
+  "extends": ["google"],
+  "rules": {
+    "quotes": ["error", "single"],
+    "object-curly-spacing": ["error", "always"],
+    "max-len": ["warn", {"code": 100}]
+  }
+}
