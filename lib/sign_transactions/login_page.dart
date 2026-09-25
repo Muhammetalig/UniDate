@@ -6,6 +6,9 @@ import 'register_page.dart';
 import '../home/home_page.dart';
 import 'forget_password.dart';
 import '../widgets/guest_access.dart';
+import '../services/google_auth_service.dart';
+import '../profile/settings/account_transactions/account_info/account_info.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -21,6 +24,47 @@ class _LoginPageState extends State<LoginPage> {
   bool _rememberMe = false;
   bool _isLoading = false;
   String _errorMessage = '';
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final credential = await GoogleAuthService.instance.signIn();
+      final user = credential.user;
+      if (user == null) {
+        throw StateError('Google hesabı alınamadı');
+      }
+      final needsUniversity = await GoogleAuthService.instance.needsUniversity(user);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => needsUniversity
+              ? const AccountInfoPage(isOnboarding: true)
+              : const HomePage(),
+        ),
+      );
+    } on GoogleSignInException catch (error) {
+      if (error.code != GoogleSignInExceptionCode.canceled && mounted) {
+        setState(() => _errorMessage =
+            'Google ile giriş yapılamadı. Google giriş ayarlarını kontrol edin.');
+      }
+    } on FirebaseAuthException catch (error) {
+      if (mounted) {
+        setState(() => _errorMessage =
+            'Google ile giriş yapılamadı: ${error.message ?? error.code}');
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _errorMessage = 'Google ile giriş yapılamadı: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   Future<void> _signInWithEmailAndPassword() async {
     setState(() {
@@ -514,6 +558,14 @@ class _LoginPageState extends State<LoginPage> {
                               
                               const SizedBox(height: 28),
                               
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _isLoading ? null : _signInWithGoogle,
+                                  icon: const Icon(Icons.account_circle_outlined),
+                                  label: const Text('Google ile devam et'),
+                                ),
+                              ),
                               const Center(child: GuestAccessButton()),
                               const SizedBox(height: 12),
                               // Sign up link

@@ -85,11 +85,6 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     }
   }
 
-  bool _isEmailVerified(String? email) {
-    if (email == null) return false;
-    return email.endsWith('.edu.tr') || email.endsWith('.edu');
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -429,7 +424,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             const SizedBox(height: 10),
             Divider(color: theme.dividerColor),
             const SizedBox(height: 10),
-            if (_isEmailVerified(userData!['email'])) ...[
+            if (userData!['isVerified'] == true) ...[
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 8,

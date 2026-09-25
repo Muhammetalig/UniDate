@@ -9,9 +9,12 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 import 'dart:io';
+import 'package:unihub/home/home_page.dart';
 
 class AccountInfoPage extends StatefulWidget {
-  const AccountInfoPage({super.key});
+  final bool isOnboarding;
+
+  const AccountInfoPage({super.key, this.isOnboarding = false});
 
   @override
   State<AccountInfoPage> createState() => _AccountInfoPageState();
@@ -1409,7 +1412,14 @@ class _AccountInfoPageState extends State<AccountInfoPage> {
               backgroundColor: Colors.green,
             ),
           );
-          Navigator.pop(context);
+          if (widget.isOnboarding) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute<void>(builder: (_) => const HomePage()),
+            );
+          } else {
+            Navigator.pop(context);
+          }
         }
       }
     } catch (e) {
@@ -1448,7 +1458,7 @@ class _AccountInfoPageState extends State<AccountInfoPage> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Hesap Bilgileri'),
+        title: Text(widget.isOnboarding ? 'Profilini Tamamla' : 'Hesap Bilgileri'),
         backgroundColor: theme.appBarTheme.backgroundColor,
         foregroundColor: theme.appBarTheme.foregroundColor,
         elevation: 0,

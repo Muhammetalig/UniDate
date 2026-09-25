@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "374957165391",
+    "firebase_url": "https://universityfirebase-155dd-default-rtdb.firebaseio.com",
     "project_id": "universityfirebase-155dd",
     "storage_bucket": "universityfirebase-155dd.firebasestorage.app"
   },
@@ -12,7 +13,20 @@
           "package_name": "com.example.unihub"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "374957165391-lnl9oe4fers9b8q2il4dkh2qhicgfboc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.unihub",
+            "certificate_hash": "89d809637281556ed9f2f69b3657ffcbf1a707f9"
+          }
+        },
+        {
+          "client_id": "374957165391-nrak559ovuldd58eeobo2ukjkg6sakti.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyB-sQhQ0KwZnVNrVAyf0fI-ol2yQ9mjoho"
@@ -20,7 +34,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "374957165391-nrak559ovuldd58eeobo2ukjkg6sakti.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "374957165391-lsuqfle9fnob7pslillcnshdocrk577h.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.unihub"
+              }
+            }
+          ]
         }
       }
     }

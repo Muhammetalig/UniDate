@@ -5,8 +5,9 @@ UniHub, üniversite öğrencilerinin birbirleriyle iletişim kurabileceği, prof
 
 Özellikler
 - Geçerli e-posta adresi ile kayıt / giriş (.edu.tr zorunluluğu yok)
+- Google hesabıyla giriş; ilk girişte profil oluşturma ve üniversite seçimi
 - Başlangıç ve giriş ekranlarında geçici misafir erişimi; hesap oluşturmadan ana sayfa gezilebilir. Mesajlaşma, arkadaşlık ve profil işlemleri için giriş gerekir.
-- E-posta doğrulama (verification link) zorunlu — doğrulanmadan giriş engellenir
+- E-posta/şifre kayıtlarında doğrulama bağlantısı zorunludur. Google hesapları Google tarafından doğrulanır.
 - Kayıt sırasında isim / soyisim ve profil bilgileri Firestore'da users koleksiyonuna kaydedilir
 - Parola sıfırlama: Firebase'in sendPasswordResetEmail metodu kullanılır
 - Profil görüntüleme ve düzenleme (profile_edit)
@@ -29,7 +30,8 @@ Hızlı başlangıç
      ```
    - Firebase Console'dan projenizin yapılandırma bilgilerini alın ve `.env` dosyasına girin. Aynı Firebase projesinde çalışacaksanız proje sahibinden erişim isteyin; `.env` dosyasını GitHub'a yüklemeyin.
    - Android Google Maps anahtarını kendi `android/local.properties` dosyanıza `GOOGLE_MAPS_API_KEY=...` olarak ekleyin.
-   - Firebase Console'da Authentication (Email/Password), Firestore ve Storage'ı etkinleştirin.
+   - Firebase Console'da Authentication (Email/Password ve Google), Firestore ve Storage'ı etkinleştirin.
+   - Android'de Google girişi için uygulamanın her imza sertifikasının SHA-1 değerini Firebase Console'a ekleyin. Yeni bir geliştirme makinesinde debug SHA-1 farklı olabilir; ardından `android/app/google-services.json` dosyasını yenileyin.
    - **ÖNEMLİ**: `.env` dosyası hassas bilgiler içerir ve `.gitignore` ile Git'ten hariç tutulmuştur. Bu dosyayı asla GitHub'a yüklemeyin!
 
 4. Uygulamayı çalıştır:
@@ -52,6 +54,10 @@ Hızlı başlangıç
   - FirebaseAuth ile oturum açıldıktan sonra hem `user.emailVerified` hem de Firestore'daki `isVerified` kontrol edilir.
   - Eğer Auth doğrulanmışsa fakat Firestore `isVerified: false` ise uygulama ilk başarılı girişte Firestore'u `isVerified: true` olarak günceller.
   - Eğer doğrulanmamışsa kullanıcı oturumu sonlandırılır ve şu mesaj gösterilir: "Hesabınızı aktif ediniz, şu anda pasif durumdadır."
+- Google ile giriş
+  - İlk girişte `users/{uid}` profili oluşturulur. Google'ın adı ve fotoğrafı varsa başlangıç bilgisi olarak kullanılır.
+  - Üniversite seçimi ve profil tamamlama ekranı açılır; tamamlandıktan sonra ana sayfaya geçilir.
+  - Sonraki girişlerde mevcut profil korunur. Google e-postası için `.edu.tr` koşulu aranmaz.
 - Parola sıfırlama
   - Kullanıcı "Şifremi Unuttum" ekranından e-posta adresini girer. Firebase'in `sendPasswordResetEmail` metodu kullanılarak sıfırlama linki gönderilir.
   - Kullanıcı e-postadaki linkten yeni parolasını belirler.
