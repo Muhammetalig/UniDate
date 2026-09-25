@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'chat_service.dart';
 import '../../profile/profile_page.dart';
+import '../../services/chat_photo_visibility.dart';
 
 class ChatPage extends StatefulWidget {
   final String roomId;
@@ -27,6 +29,8 @@ class _ChatPageState extends State<ChatPage> {
 
   // Kullanıcı bilgilerini cache'le
   final Map<String, Map<String, dynamic>> _userCache = {};
+  Set<String> _friendIds = <String>{};
+  StreamSubscription<Set<String>>? _friendSubscription;
   // Görüldü olarak işaretlenen mesajları takip et
   final Set<String> _markedAsSeen = {};
 
@@ -38,6 +42,11 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     // Sohbete girildiginde lastSeenAt guncelle
     _updateLastSeenAt();
+    _friendSubscription = ChatPhotoVisibility.friendsOf(_currentUserId).listen((
+      ids,
+    ) {
+      if (mounted) setState(() => _friendIds = ids);
+    });
   }
 
   @override
@@ -45,6 +54,7 @@ class _ChatPageState extends State<ChatPage> {
     // Sohbetten cikildiginda da lastSeenAt guncelle
     _updateLastSeenAt();
     _messageController.dispose();
+    _friendSubscription?.cancel();
     super.dispose();
   }
 
@@ -59,8 +69,8 @@ class _ChatPageState extends State<ChatPage> {
           .collection('participants')
           .doc(_currentUserId)
           .set({
-        'lastSeenAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+            'lastSeenAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('lastSeenAt guncelleme hatasi: $e');
     }
@@ -144,14 +154,13 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   /// Profil resmi URL'sini al
-  String? _getProfileImage(Map<String, dynamic> userData) {
-    if (userData['profileImages'] is List &&
-        (userData['profileImages'] as List).isNotEmpty) {
-      return (userData['profileImages'] as List).first as String?;
-    } else if (userData['profileImageUrl'] is String) {
-      return userData['profileImageUrl'] as String?;
-    }
-    return null;
+  String? _getProfileImage(Map<String, dynamic> userData, String ownerId) {
+    return ChatPhotoVisibility.visibleUrl(
+      userData,
+      ownerId: ownerId,
+      viewerId: _currentUserId,
+      friendIds: _friendIds,
+    );
   }
 
   /// Sadece saat formatlama
@@ -301,7 +310,10 @@ class _ChatPageState extends State<ChatPage> {
             children: [
               Text(
                 widget.activity,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               if (widget.titleSuffix != null)
                 Text(
@@ -324,113 +336,114 @@ class _ChatPageState extends State<ChatPage> {
           ],
         ),
         body: Column(
-        children: [
-          Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _service.messagesStream(widget.roomId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF2563EB)),
-                  );
-                }
-                final docs = snapshot.data?.docs ?? [];
-                if (docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 80,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Henüz mesaj yok',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
+          children: [
+            Expanded(
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: _service.messagesStream(widget.roomId),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF2563EB),
+                      ),
+                    );
+                  }
+                  final docs = snapshot.data?.docs ?? [];
+                  if (docs.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline,
+                            size: 80,
+                            color: Colors.grey[400],
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'İlk mesajı sen gönder! 👋',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
+                          const SizedBox(height: 16),
+                          Text(
+                            'Henüz mesaj yok',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'İlk mesajı sen gönder! 👋',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    reverse: true,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 16,
                     ),
-                  );
-                }
-                return ListView.builder(
-                  reverse: true,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 16,
-                  ),
-                  itemCount: docs.length,
-                  itemBuilder: (context, index) {
-                    final data = docs[index].data();
-                    final messageId = data['id'] as String?;
-                    final senderId = data['senderId'] as String? ?? '';
-                    final isMe = senderId == _currentUserId;
-                    final showDateSeparator = _shouldShowDateSeparator(
-                      docs,
-                      index,
-                    );
-                    final timestamp = data['createdAt'] as Timestamp?;
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final data = docs[index].data();
+                      final messageId = data['id'] as String?;
+                      final senderId = data['senderId'] as String? ?? '';
+                      final isMe = senderId == _currentUserId;
+                      final showDateSeparator = _shouldShowDateSeparator(
+                        docs,
+                        index,
+                      );
+                      final timestamp = data['createdAt'] as Timestamp?;
 
-                    // Mesajı görüldü olarak işaretle
-                    if (messageId != null && !isMe) {
-                      _markMessageAsSeen(messageId, senderId);
-                    }
+                      // Mesajı görüldü olarak işaretle
+                      if (messageId != null && !isMe) {
+                        _markMessageAsSeen(messageId, senderId);
+                      }
 
-                    return Column(
-                      children: [
-                        if (showDateSeparator && timestamp != null)
-                          _buildDateSeparator(
-                            timestamp.toDate().toLocal(),
-                            isDark,
+                      return Column(
+                        children: [
+                          if (showDateSeparator && timestamp != null)
+                            _buildDateSeparator(
+                              timestamp.toDate().toLocal(),
+                              isDark,
+                            ),
+                          _MessageBubble(
+                            data: data,
+                            isMe: isMe,
+                            getUserInfo: _getUserInfo,
+                            buildUserName: _buildUserName,
+                            getProfileImage: _getProfileImage,
+                            formatTime: _formatTime,
+                            isDark: isDark,
+                            currentUserId: _currentUserId,
+                            // Sadece kendi mesajlarımızda bilgi göster
+                            onLongPress: isMe
+                                ? () => _showMessageInfo(context, data)
+                                : null,
+                            // Başkalarının mesajlarını sola kaydırarak özel sohbet başlat
+                            // (zaten özel sohbetteysek bu özellik kapalı)
+                            onSwipeToPrivateChat:
+                                !isMe && !widget.roomId.startsWith('private_')
+                                ? (userId) => _startPrivateChat(context, userId)
+                                : null,
+                            // Tüm mesajlara cevap verilebilir
+                            onSwipeToReply: (messageData) =>
+                                _setReplyingTo(messageData),
                           ),
-                        _MessageBubble(
-                          data: data,
-                          isMe: isMe,
-                          getUserInfo: _getUserInfo,
-                          buildUserName: _buildUserName,
-                          getProfileImage: _getProfileImage,
-                          formatTime: _formatTime,
-                          isDark: isDark,
-                          currentUserId: _currentUserId,
-                          // Sadece kendi mesajlarımızda bilgi göster
-                          onLongPress: isMe
-                              ? () => _showMessageInfo(context, data)
-                              : null,
-                          // Başkalarının mesajlarını sola kaydırarak özel sohbet başlat
-                          // (zaten özel sohbetteysek bu özellik kapalı)
-                          onSwipeToPrivateChat:
-                              !isMe && !widget.roomId.startsWith('private_')
-                                  ? (userId) =>
-                                      _startPrivateChat(context, userId)
-                                  : null,
-                          // Tüm mesajlara cevap verilebilir
-                          onSwipeToReply: (messageData) =>
-                              _setReplyingTo(messageData),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
             ),
-          ),
-          _buildMessageInput(isDark),
-        ],
+            _buildMessageInput(isDark),
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -475,7 +488,7 @@ class _ChatPageState extends State<ChatPage> {
             color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, -2),
               ),
@@ -625,7 +638,7 @@ class _MessageBubble extends StatelessWidget {
   final bool isMe;
   final Future<Map<String, dynamic>> Function(String) getUserInfo;
   final String Function(Map<String, dynamic>, String?) buildUserName;
-  final String? Function(Map<String, dynamic>) getProfileImage;
+  final String? Function(Map<String, dynamic>, String) getProfileImage;
   final String Function(Timestamp?) formatTime;
   final bool isDark;
   final VoidCallback? onLongPress;
@@ -654,8 +667,6 @@ class _MessageBubble extends StatelessWidget {
     final senderEmail = data['senderEmail'] as String?;
     final senderName =
         data['senderName'] as String?; // Mesajla birlikte gelen isim
-    final senderPhoto =
-        data['senderPhoto'] as String?; // Mesajla birlikte gelen fotoğraf
     final timestamp = data['createdAt'] as Timestamp?;
     final time = formatTime(timestamp);
     final replyTo = data['replyTo'] as Map<String, dynamic>?;
@@ -667,7 +678,6 @@ class _MessageBubble extends StatelessWidget {
       senderId,
       senderEmail,
       senderName,
-      senderPhoto,
       time,
       replyTo,
     );
@@ -705,7 +715,7 @@ class _MessageBubble extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF2563EB).withOpacity(0.2),
+              color: const Color(0xFF2563EB).withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.reply, color: Color(0xFF2563EB), size: 24),
@@ -718,7 +728,7 @@ class _MessageBubble extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB).withOpacity(0.2),
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -742,7 +752,6 @@ class _MessageBubble extends StatelessWidget {
     String senderId,
     String? senderEmail,
     String? senderName,
-    String? senderPhoto,
     String time,
     Map<String, dynamic>? replyTo,
   ) {
@@ -757,39 +766,34 @@ class _MessageBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             if (!isMe) ...[
-              // Önce mesajdaki fotoğrafı kullan, yoksa Firestore'dan çek
-              if (senderPhoto != null)
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: _getAvatarColor(senderId),
-                  backgroundImage: NetworkImage(senderPhoto),
-                )
-              else
-                FutureBuilder<Map<String, dynamic>>(
-                  future: getUserInfo(senderId),
-                  builder: (context, snapshot) {
-                    final userData = snapshot.data ?? {};
-                    final imageUrl = getProfileImage(userData);
+              StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(senderId)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final userData = snapshot.data?.data() ?? {};
+                  final imageUrl = getProfileImage(userData, senderId);
 
-                    return CircleAvatar(
-                      radius: 16,
-                      backgroundColor: _getAvatarColor(senderId),
-                      backgroundImage: imageUrl != null
-                          ? NetworkImage(imageUrl)
-                          : null,
-                      child: imageUrl == null
-                          ? Text(
-                              _getInitial(userData, senderEmail),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            )
-                          : null,
-                    );
-                  },
-                ),
+                  return CircleAvatar(
+                    radius: 16,
+                    backgroundColor: _getAvatarColor(senderId),
+                    backgroundImage: imageUrl != null
+                        ? NetworkImage(imageUrl)
+                        : null,
+                    child: imageUrl == null
+                        ? Text(
+                            _getInitial(userData, senderEmail),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          )
+                        : null,
+                  );
+                },
+              ),
               const SizedBox(width: 8),
             ],
             Flexible(
@@ -813,7 +817,7 @@ class _MessageBubble extends StatelessWidget {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 5,
                       offset: const Offset(0, 2),
                     ),
@@ -829,15 +833,15 @@ class _MessageBubble extends StatelessWidget {
                         margin: const EdgeInsets.only(bottom: 6),
                         decoration: BoxDecoration(
                           color: isMe
-                              ? Colors.white.withOpacity(0.15)
+                              ? Colors.white.withValues(alpha: 0.15)
                               : (isDark
-                                    ? Colors.white.withOpacity(0.08)
-                                    : Colors.grey.withOpacity(0.12)),
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.grey.withValues(alpha: 0.12)),
                           borderRadius: BorderRadius.circular(8),
                           border: Border(
                             left: BorderSide(
                               color: isMe
-                                  ? Colors.white.withOpacity(0.5)
+                                  ? Colors.white.withValues(alpha: 0.5)
                                   : const Color(0xFF2563EB),
                               width: 3,
                             ),
@@ -852,7 +856,7 @@ class _MessageBubble extends StatelessWidget {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: isMe
-                                    ? Colors.white.withOpacity(0.9)
+                                    ? Colors.white.withValues(alpha: 0.9)
                                     : const Color(0xFF2563EB),
                               ),
                             ),
@@ -864,7 +868,7 @@ class _MessageBubble extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: 12,
                                 color: isMe
-                                    ? Colors.white.withOpacity(0.7)
+                                    ? Colors.white.withValues(alpha: 0.7)
                                     : (isDark
                                           ? Colors.grey[400]
                                           : Colors.grey[600]),
@@ -1002,7 +1006,7 @@ class _MessageInfoSheet extends StatelessWidget {
   final FirebaseFirestore firestore;
   final Future<Map<String, dynamic>> Function(String) getUserInfo;
   final String Function(Map<String, dynamic>, String?) buildUserName;
-  final String? Function(Map<String, dynamic>) getProfileImage;
+  final String? Function(Map<String, dynamic>, String) getProfileImage;
 
   const _MessageInfoSheet({
     required this.messageId,
@@ -1184,11 +1188,15 @@ class _MessageInfoSheet extends StatelessWidget {
                     final seenAt = seenData['seenAt'] as Timestamp?;
 
                     return FutureBuilder<Map<String, dynamic>>(
-                      future: getUserInfo(userId),
+                      future: firestore
+                          .collection('users')
+                          .doc(userId)
+                          .get()
+                          .then((doc) => doc.data() ?? {}),
                       builder: (context, userSnapshot) {
                         final userData = userSnapshot.data ?? {};
                         final name = buildUserName(userData, null);
-                        final imageUrl = getProfileImage(userData);
+                        final imageUrl = getProfileImage(userData, userId);
                         final seenTime = seenAt != null
                             ? '${seenAt.toDate().toLocal().hour.toString().padLeft(2, '0')}:${seenAt.toDate().toLocal().minute.toString().padLeft(2, '0')}'
                             : '';
@@ -1293,7 +1301,7 @@ class _MessageInfoSheet extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
+                color: Colors.black.withValues(alpha: 0.7),
                 borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(16),
                 ),

@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'chat_page.dart';
+import '../../services/chat_photo_visibility.dart';
 
 class PrivateChatsPage extends StatefulWidget {
   const PrivateChatsPage({super.key});
@@ -14,22 +16,23 @@ class _PrivateChatsPageState extends State<PrivateChatsPage> {
   final _firestore = FirebaseFirestore.instance;
   final String? _currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
-  // Kullanıcı bilgilerini cache'le
-  final Map<String, Map<String, dynamic>> _userCache = {};
+  Set<String> _friendIds = <String>{};
+  StreamSubscription<Set<String>>? _friendSubscription;
 
-  Future<Map<String, dynamic>> _getUserInfo(String userId) async {
-    if (_userCache.containsKey(userId)) {
-      return _userCache[userId]!;
-    }
+  @override
+  void initState() {
+    super.initState();
+    _friendSubscription = ChatPhotoVisibility.friendsOf(_currentUserId).listen((
+      ids,
+    ) {
+      if (mounted) setState(() => _friendIds = ids);
+    });
+  }
 
-    try {
-      final doc = await _firestore.collection('users').doc(userId).get();
-      final data = doc.data() ?? {};
-      _userCache[userId] = data;
-      return data;
-    } catch (e) {
-      return {};
-    }
+  @override
+  void dispose() {
+    _friendSubscription?.cancel();
+    super.dispose();
   }
 
   String _buildUserName(Map<String, dynamic> userData, String? email) {
@@ -45,18 +48,6 @@ class _PrivateChatsPageState extends State<PrivateChatsPage> {
     }
 
     return 'Kullanıcı';
-  }
-
-  String? _getProfileImage(Map<String, dynamic> userData) {
-    final images = userData['profileImages'];
-    if (images is List && images.isNotEmpty) {
-      return images.first as String?;
-    }
-    final singleImage = userData['profileImageUrl'];
-    if (singleImage is String && singleImage.isNotEmpty) {
-      return singleImage;
-    }
-    return null;
   }
 
   Color _getAvatarColor(String oderId) {
@@ -164,17 +155,16 @@ class _PrivateChatsPageState extends State<PrivateChatsPage> {
 
           // Sadece private_ ile başlayan odaları filtrele ve son mesaja göre sırala
           final allDocs = snapshot.data?.docs ?? [];
-          final rooms = allDocs
-              .where((doc) => doc.id.startsWith('private_'))
-              .toList()
-            ..sort((a, b) {
-              final aTime = a.data()['lastMessageAt'] as Timestamp?;
-              final bTime = b.data()['lastMessageAt'] as Timestamp?;
-              if (aTime == null && bTime == null) return 0;
-              if (aTime == null) return 1;
-              if (bTime == null) return -1;
-              return bTime.compareTo(aTime);
-            });
+          final rooms =
+              allDocs.where((doc) => doc.id.startsWith('private_')).toList()
+                ..sort((a, b) {
+                  final aTime = a.data()['lastMessageAt'] as Timestamp?;
+                  final bTime = b.data()['lastMessageAt'] as Timestamp?;
+                  if (aTime == null && bTime == null) return 0;
+                  if (aTime == null) return 1;
+                  if (bTime == null) return -1;
+                  return bTime.compareTo(aTime);
+                });
 
           if (rooms.isEmpty) {
             return Center(
@@ -184,7 +174,7 @@ class _PrivateChatsPageState extends State<PrivateChatsPage> {
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2563EB).withOpacity(0.1),
+                      color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -232,12 +222,20 @@ class _PrivateChatsPageState extends State<PrivateChatsPage> {
               final lastMessage = room['lastMessage'] as String? ?? '';
               final lastMessageAt = room['lastMessageAt'] as Timestamp?;
 
-              return FutureBuilder<Map<String, dynamic>>(
-                future: _getUserInfo(otherUserId),
+              return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: _firestore
+                    .collection('users')
+                    .doc(otherUserId)
+                    .snapshots(),
                 builder: (context, userSnapshot) {
-                  final userData = userSnapshot.data ?? {};
+                  final userData = userSnapshot.data?.data() ?? {};
                   final userName = _buildUserName(userData, null);
-                  final profileImage = _getProfileImage(userData);
+                  final profileImage = ChatPhotoVisibility.visibleUrl(
+                    userData,
+                    ownerId: otherUserId,
+                    viewerId: _currentUserId,
+                    friendIds: _friendIds,
+                  );
 
                   return Container(
                     margin: const EdgeInsets.symmetric(
@@ -249,7 +247,7 @@ class _PrivateChatsPageState extends State<PrivateChatsPage> {
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 5,
                           offset: const Offset(0, 2),
                         ),

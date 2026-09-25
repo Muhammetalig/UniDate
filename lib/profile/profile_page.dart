@@ -11,16 +11,14 @@ import 'tabs/location_tab.dart';
 class ProfilePage extends StatefulWidget {
   final String userId;
 
-  const ProfilePage({
-    super.key,
-    required this.userId,
-  });
+  const ProfilePage({super.key, required this.userId});
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStateMixin {
+class _ProfilePageState extends State<ProfilePage>
+    with SingleTickerProviderStateMixin {
   Map<String, dynamic>? userData;
   bool isLoading = true;
   List<String> profileImages = [];
@@ -44,7 +42,9 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
 
   Future<void> _loadUserData() async {
     try {
-      debugPrint('ProfileInformation: Loading user data for userId: ${widget.userId}');
+      debugPrint(
+        'ProfileInformation: Loading user data for userId: ${widget.userId}',
+      );
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.userId)
@@ -52,7 +52,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
 
       if (mounted) {
         final data = doc.data();
-        
+
         // Load profile images
         if (data?['profileImages'] != null && data!['profileImages'] is List) {
           profileImages = List<String>.from(data['profileImages']);
@@ -60,16 +60,20 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           // Backward compatibility
           profileImages = [data!['profileImageUrl']];
         }
-        
-        debugPrint('ProfileInformation: Loaded ${profileImages.length} profile images');
-        
+
+        debugPrint(
+          'ProfileInformation: Loaded ${profileImages.length} profile images',
+        );
+
         // Debug location data
         if (data?['location'] != null) {
-          debugPrint('ProfileInformation: Location data found: ${data!['location']}');
+          debugPrint(
+            'ProfileInformation: Location data found: ${data!['location']}',
+          );
         } else {
           debugPrint('ProfileInformation: No location data found');
         }
-        
+
         setState(() {
           userData = data;
           isLoading = false;
@@ -81,6 +85,75 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         setState(() {
           isLoading = false;
         });
+      }
+    }
+  }
+
+  String? get _activeMood {
+    final mood = userData?['mood'] as String?;
+    final updatedAt = userData?['moodUpdatedAt'] as Timestamp?;
+    if (mood == null || mood.isEmpty || updatedAt == null) return null;
+    final age = DateTime.now().difference(updatedAt.toDate());
+    return age.isNegative || age >= const Duration(hours: 24) ? null : mood;
+  }
+
+  Future<void> _chooseMood() async {
+    const moods = [
+      '😊 Mutlu',
+      '😌 Sakin',
+      '⚡ Enerjik',
+      '📚 Ders modunda',
+      '☕ Sohbete açık',
+      '😴 Yorgun',
+      '🤔 Düşünceli',
+    ];
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(
+              title: Text('Anlık ruh hâlin'),
+              subtitle: Text('24 saat görünür'),
+            ),
+            for (final mood in moods)
+              ListTile(
+                title: Text(mood),
+                onTap: () => Navigator.pop(sheetContext, mood),
+              ),
+            if (_activeMood != null)
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Ruh hâlini kaldır'),
+                onTap: () => Navigator.pop(sheetContext, 'clear'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return;
+
+    final now = Timestamp.now();
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .set({
+            'mood': selected == 'clear' ? null : selected,
+            'moodUpdatedAt': selected == 'clear' ? null : now,
+          }, SetOptions(merge: true));
+      if (mounted) {
+        setState(() {
+          userData!['mood'] = selected == 'clear' ? null : selected;
+          userData!['moodUpdatedAt'] = selected == 'clear' ? null : now;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ruh hâli güncellenemedi')),
+        );
       }
     }
   }
@@ -100,9 +173,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           backgroundColor: theme.appBarTheme.backgroundColor,
           foregroundColor: theme.appBarTheme.foregroundColor,
         ),
-        body: const Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -114,12 +185,10 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           backgroundColor: theme.appBarTheme.backgroundColor,
           foregroundColor: theme.appBarTheme.foregroundColor,
         ),
-        body: const Center(
-          child: Text('Kullanıcı bilgileri yüklenemedi'),
-        ),
+        body: const Center(child: Text('Kullanıcı bilgileri yüklenemedi')),
       );
     }
-    
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
@@ -144,7 +213,12 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildHeader(BuildContext context, ThemeData theme, bool isDark, bool isViewingOwnProfile) {
+  Widget _buildHeader(
+    BuildContext context,
+    ThemeData theme,
+    bool isDark,
+    bool isViewingOwnProfile,
+  ) {
     return Stack(
       children: [
         // Cover Image
@@ -213,10 +287,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: Colors.white,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 4,
-                  ),
+                  border: Border.all(color: Colors.white, width: 4),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.2),
@@ -254,7 +325,10 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                         bottom: 0,
                         right: 0,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF2563EB),
                             borderRadius: BorderRadius.circular(10),
@@ -263,7 +337,11 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const FaIcon(FontAwesomeIcons.images, size: 10, color: Colors.white),
+                              const FaIcon(
+                                FontAwesomeIcons.images,
+                                size: 10,
+                                color: Colors.white,
+                              ),
                               const SizedBox(width: 2),
                               Text(
                                 '${profileImages.length}',
@@ -322,20 +400,25 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                   Navigator.push(
                     context,
                     PageRouteBuilder(
-                      pageBuilder: (context, animation, secondaryAnimation) => const SettingsPage(),
-                      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                        const begin = Offset(1.0, 0.0);
-                        const end = Offset.zero;
-                        const curve = Curves.easeInOut;
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          const SettingsPage(),
+                      transitionsBuilder:
+                          (context, animation, secondaryAnimation, child) {
+                            const begin = Offset(1.0, 0.0);
+                            const end = Offset.zero;
+                            const curve = Curves.easeInOut;
 
-                        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                        var offsetAnimation = animation.drive(tween);
+                            var tween = Tween(
+                              begin: begin,
+                              end: end,
+                            ).chain(CurveTween(curve: curve));
+                            var offsetAnimation = animation.drive(tween);
 
-                        return SlideTransition(
-                          position: offsetAnimation,
-                          child: child,
-                        );
-                      },
+                            return SlideTransition(
+                              position: offsetAnimation,
+                              child: child,
+                            );
+                          },
                     ),
                   );
                 },
@@ -368,7 +451,8 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                '${userData!['firstName'] ?? ''} ${userData!['lastName'] ?? ''}'.trim(),
+                '${userData!['firstName'] ?? ''} ${userData!['lastName'] ?? ''}'
+                    .trim(),
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -378,6 +462,21 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             ],
           ),
           const SizedBox(height: 15),
+
+          if (_activeMood != null ||
+              FirebaseAuth.instance.currentUser?.uid == widget.userId) ...[
+            ActionChip(
+              avatar: Icon(
+                _activeMood == null ? Icons.add_reaction_outlined : Icons.mood,
+                size: 18,
+              ),
+              label: Text(_activeMood ?? 'Ruh hâlini paylaş'),
+              onPressed: FirebaseAuth.instance.currentUser?.uid == widget.userId
+                  ? _chooseMood
+                  : null,
+            ),
+            const SizedBox(height: 12),
+          ],
 
           // Email
           if (userData!['email'] != null)
@@ -404,11 +503,13 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
           if (userData!['department'] != null || userData!['class'] != null)
             _buildInfoRow(
               FontAwesomeIcons.book,
-              '${userData!['department'] ?? ''} ${userData!['class'] != null ? '- ${userData!['class']}' : ''}'.trim(),
+              '${userData!['department'] ?? ''} ${userData!['class'] != null ? '- ${userData!['class']}' : ''}'
+                  .trim(),
               isDark,
             ),
           // Bio
-          if (userData!['bio'] != null && userData!['bio'].toString().isNotEmpty) ...[
+          if (userData!['bio'] != null &&
+              userData!['bio'].toString().isNotEmpty) ...[
             const SizedBox(height: 10),
             Divider(color: theme.dividerColor),
             const SizedBox(height: 10),
@@ -426,10 +527,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             const SizedBox(height: 10),
             if (userData!['isVerified'] == true) ...[
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.green,
                   borderRadius: BorderRadius.circular(12),
@@ -490,7 +588,9 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
             child: TabBar(
               controller: _tabController,
               labelColor: const Color(0xFF2563EB),
-              unselectedLabelColor: isDark ? Colors.grey[500] : Colors.grey[600],
+              unselectedLabelColor: isDark
+                  ? Colors.grey[500]
+                  : Colors.grey[600],
               indicatorColor: const Color(0xFF2563EB),
               indicatorSize: TabBarIndicatorSize.tab,
               labelStyle: const TextStyle(
@@ -538,10 +638,10 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         } else {
           return 'Doğum tarihi yok';
         }
-        
+
         final age = _calculateAge(birthDate);
         final zodiac = _getZodiacSign(birthDate);
-        
+
         return '$age yaşında • $zodiac';
       }
       return 'Doğum tarihi yok';
@@ -597,11 +697,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          FaIcon(
-            icon,
-            size: 16,
-            color: const Color(0xFF2563EB),
-          ),
+          FaIcon(icon, size: 16, color: const Color(0xFF2563EB)),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -655,7 +751,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                             child: CircularProgressIndicator(
                               value: loadingProgress.expectedTotalBytes != null
                                   ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
+                                        loadingProgress.expectedTotalBytes!
                                   : null,
                               color: Colors.white,
                             ),
@@ -677,7 +773,10 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: const FaIcon(FontAwesomeIcons.xmark, color: Colors.white),
+                      icon: const FaIcon(
+                        FontAwesomeIcons.xmark,
+                        color: Colors.white,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),

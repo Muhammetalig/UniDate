@@ -71,7 +71,6 @@ class ChatService {
 
     // Gönderen bilgilerini al
     String? senderName;
-    String? senderPhoto;
     try {
       final userDoc = await _firestore.collection('users').doc(uid).get();
       if (userDoc.exists) {
@@ -79,16 +78,9 @@ class ChatService {
         final firstName = userData['firstName'] as String?;
         final lastName = userData['lastName'] as String?;
         if (firstName != null && firstName.isNotEmpty) {
-          senderName = lastName != null && lastName.isNotEmpty 
-              ? '$firstName $lastName' 
+          senderName = lastName != null && lastName.isNotEmpty
+              ? '$firstName $lastName'
               : firstName;
-        }
-        // Profil resmi
-        if (userData['profileImages'] is List && 
-            (userData['profileImages'] as List).isNotEmpty) {
-          senderPhoto = (userData['profileImages'] as List).first as String?;
-        } else if (userData['profileImageUrl'] is String) {
-          senderPhoto = userData['profileImageUrl'] as String?;
         }
       }
     } catch (e) {
@@ -103,7 +95,6 @@ class ChatService {
       'senderId': uid,
       'senderEmail': email,
       'senderName': senderName,
-      'senderPhoto': senderPhoto,
       'text': text.trim(),
       'createdAt': FieldValue.serverTimestamp(),
     };
@@ -140,11 +131,17 @@ class ChatService {
 
     if (!doc.exists) {
       // Diğer kullanıcının bilgilerini al
-      final otherUserDoc = await _firestore.collection('users').doc(otherUserId).get();
+      final otherUserDoc = await _firestore
+          .collection('users')
+          .doc(otherUserId)
+          .get();
       final otherUserData = otherUserDoc.data() ?? {};
-      
+
       // Mevcut kullanıcının bilgilerini al
-      final currentUserDoc = await _firestore.collection('users').doc(currentUid).get();
+      final currentUserDoc = await _firestore
+          .collection('users')
+          .doc(currentUid)
+          .get();
       final currentUserData = currentUserDoc.data() ?? {};
 
       await roomRef.set({
@@ -154,12 +151,10 @@ class ChatService {
           currentUid: {
             'firstName': currentUserData['firstName'],
             'lastName': currentUserData['lastName'],
-            'profileImage': _getProfileImageFromData(currentUserData),
           },
           otherUserId: {
             'firstName': otherUserData['firstName'],
             'lastName': otherUserData['lastName'],
-            'profileImage': _getProfileImageFromData(otherUserData),
           },
         },
         'createdAt': FieldValue.serverTimestamp(),
@@ -179,16 +174,6 @@ class ChatService {
     return roomId;
   }
 
-  String? _getProfileImageFromData(Map<String, dynamic> userData) {
-    if (userData['profileImages'] is List && 
-        (userData['profileImages'] as List).isNotEmpty) {
-      return (userData['profileImages'] as List).first as String?;
-    } else if (userData['profileImageUrl'] is String) {
-      return userData['profileImageUrl'] as String?;
-    }
-    return null;
-  }
-
   /// Özel sohbet için diğer kullanıcının bilgilerini getir
   Future<Map<String, dynamic>> getPrivateRoomInfo(String roomId) async {
     final currentUid = _auth.currentUser?.uid;
@@ -198,8 +183,9 @@ class ChatService {
     if (!roomDoc.exists) return {};
 
     final data = roomDoc.data() ?? {};
-    final participantInfo = data['participantInfo'] as Map<String, dynamic>? ?? {};
-    
+    final participantInfo =
+        data['participantInfo'] as Map<String, dynamic>? ?? {};
+
     // Diğer kullanıcının bilgilerini bul
     for (final entry in participantInfo.entries) {
       if (entry.key != currentUid) {

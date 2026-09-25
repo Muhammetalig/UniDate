@@ -17,7 +17,8 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
   // Privacy settings
   bool hideFromOtherUniversities = false;
   String messagePrivacy = 'everyone'; // everyone, friends, none
-  String profilePrivacy = 'public';   // public, friends
+  String chatPhotoVisibility = 'everyone'; // everyone, friends, none
+  String profilePrivacy = 'public'; // public, friends
 
   @override
   void initState() {
@@ -39,8 +40,10 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
       if (userDoc.exists) {
         final data = userDoc.data()!;
         setState(() {
-          hideFromOtherUniversities = data['hideFromOtherUniversities'] ?? false;
+          hideFromOtherUniversities =
+              data['hideFromOtherUniversities'] ?? false;
           messagePrivacy = data['messagePrivacy'] ?? 'everyone';
+          chatPhotoVisibility = data['chatPhotoVisibility'] ?? 'everyone';
           profilePrivacy = data['profilePrivacy'] ?? 'public';
           isLoading = false;
         });
@@ -74,10 +77,7 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Hata: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Hata: $e'), backgroundColor: Colors.red),
         );
       }
     }
@@ -117,13 +117,19 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                       value: hideFromOtherUniversities,
                       onChanged: (value) {
                         setState(() => hideFromOtherUniversities = value);
-                        _updatePrivacySetting('hideFromOtherUniversities', value);
+                        _updatePrivacySetting(
+                          'hideFromOtherUniversities',
+                          value,
+                        );
                       },
                       title: Text(
                         hideFromOtherUniversities
                             ? 'Sadece üniversitem görebilir'
                             : 'Herkes görebilir',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       contentPadding: EdgeInsets.zero,
                     ),
@@ -179,6 +185,53 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
 
                   const SizedBox(height: 20),
 
+                  _buildSettingSection(
+                    'Sohbette Profil Fotoğrafım',
+                    'Fotoğrafınızı sohbetlerde kimlerin göreceğini seçin',
+                    FontAwesomeIcons.image,
+                    Column(
+                      children: [
+                        _buildPrivacyOption(
+                          context,
+                          icon: FontAwesomeIcons.globe,
+                          title: 'Herkes görsün',
+                          value: 'everyone',
+                          groupValue: chatPhotoVisibility,
+                          onChanged: (value) {
+                            setState(() => chatPhotoVisibility = value!);
+                            _updatePrivacySetting('chatPhotoVisibility', value);
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        _buildPrivacyOption(
+                          context,
+                          icon: FontAwesomeIcons.users,
+                          title: 'Arkadaşlarım görsün',
+                          value: 'friends',
+                          groupValue: chatPhotoVisibility,
+                          onChanged: (value) {
+                            setState(() => chatPhotoVisibility = value!);
+                            _updatePrivacySetting('chatPhotoVisibility', value);
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        _buildPrivacyOption(
+                          context,
+                          icon: FontAwesomeIcons.eyeSlash,
+                          title: 'Kimse görmesin',
+                          value: 'none',
+                          groupValue: chatPhotoVisibility,
+                          onChanged: (value) {
+                            setState(() => chatPhotoVisibility = value!);
+                            _updatePrivacySetting('chatPhotoVisibility', value);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
                   // Profile privacy
                   _buildSettingSection(
                     'Profil Gizliliği',
@@ -221,7 +274,9 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                     decoration: BoxDecoration(
                       color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                      border: Border.all(
+                        color: Colors.blue.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,11 +409,7 @@ class _PrivacySettingsPageState extends State<PrivacySettingsPage> {
                   color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: FaIcon(
-                  icon,
-                  color: const Color(0xFF2563EB),
-                  size: 24,
-                ),
+                child: FaIcon(icon, color: const Color(0xFF2563EB), size: 24),
               ),
               const SizedBox(width: 12),
               Expanded(
