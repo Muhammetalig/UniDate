@@ -7,6 +7,7 @@ import 'tabs/social_media_tab.dart';
 import 'tabs/statistics_tab.dart';
 import 'tabs/interest_tags_tab.dart';
 import 'tabs/location_tab.dart';
+import 'status_frames.dart';
 
 class ProfilePage extends StatefulWidget {
   final String userId;
@@ -158,6 +159,34 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
+  StatusFrameSelection get _statusFrames =>
+      StatusFrameSelection.fromUserData(userData);
+
+  Future<void> _editStatusFrames() async {
+    final selection = await showStatusFrameEditor(
+      context,
+      avatar: _buildAvatar(),
+      avatarSize: 100,
+      initial: _statusFrames,
+    );
+    if (selection == null) return;
+
+    final fields = selection.toFirestore();
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .set(fields, SetOptions(merge: true));
+      if (mounted) setState(() => userData!.addAll(fields));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Durum çerçevesi güncellenemedi')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -197,7 +226,21 @@ class _ProfilePageState extends State<ProfilePage>
             children: [
               // Header with cover image and profile photo
               _buildHeader(context, theme, isDark, isViewingOwnProfile),
-              const SizedBox(height: 60),
+              if (_statusFrames.others.isEmpty)
+                const SizedBox(height: 60)
+              else
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final frame in _statusFrames.others)
+                        StatusFrameTag(frame),
+                    ],
+                  ),
+                ),
 
               // User Information Card
               _buildUserInfoCard(theme, isDark),
@@ -281,82 +324,10 @@ class _ProfilePageState extends State<ProfilePage>
                   _showFullScreenImages(context);
                 }
               },
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                  border: Border.all(color: Colors.white, width: 4),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  children: [
-                    ClipOval(
-                      child: profileImages.isNotEmpty
-                          ? Image.network(
-                              profileImages[0],
-                              width: 100,
-                              height: 100,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return const FaIcon(
-                                  FontAwesomeIcons.user,
-                                  size: 50,
-                                  color: Color(0xFF2563EB),
-                                );
-                              },
-                            )
-                          : const FaIcon(
-                              FontAwesomeIcons.user,
-                              size: 50,
-                              color: Color(0xFF2563EB),
-                            ),
-                    ),
-                    // Image count indicator
-                    if (profileImages.length > 1)
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2563EB),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const FaIcon(
-                                FontAwesomeIcons.images,
-                                size: 10,
-                                color: Colors.white,
-                              ),
-                              const SizedBox(width: 2),
-                              Text(
-                                '${profileImages.length}',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+              child: StatusFramedAvatar(
+                avatar: _buildAvatar(),
+                avatarSize: 100,
+                frame: _statusFrames.shown,
               ),
             ),
           ),
@@ -429,6 +400,83 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
+  Widget _buildAvatar() {
+    return Container(
+      width: 100,
+      height: 100,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(color: Colors.white, width: 4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          ClipOval(
+            child: profileImages.isNotEmpty
+                ? Image.network(
+                    profileImages[0],
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const FaIcon(
+                        FontAwesomeIcons.user,
+                        size: 50,
+                        color: Color(0xFF2563EB),
+                      );
+                    },
+                  )
+                : const FaIcon(
+                    FontAwesomeIcons.user,
+                    size: 50,
+                    color: Color(0xFF2563EB),
+                  ),
+          ),
+          // Image count indicator
+          if (profileImages.length > 1)
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2563EB),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const FaIcon(
+                      FontAwesomeIcons.images,
+                      size: 10,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      '${profileImages.length}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildUserInfoCard(ThemeData theme, bool isDark) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -474,6 +522,19 @@ class _ProfilePageState extends State<ProfilePage>
               onPressed: FirebaseAuth.instance.currentUser?.uid == widget.userId
                   ? _chooseMood
                   : null,
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          if (FirebaseAuth.instance.currentUser?.uid == widget.userId) ...[
+            ActionChip(
+              avatar: Icon(
+                Icons.circle_outlined,
+                size: 18,
+                color: _statusFrames.shown?.color,
+              ),
+              label: const Text('Durumum ve çerçevem'),
+              onPressed: _editStatusFrames,
             ),
             const SizedBox(height: 12),
           ],
